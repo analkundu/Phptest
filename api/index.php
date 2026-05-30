@@ -45,7 +45,6 @@ try {
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
     $jsonRaw = curl_exec($ch);
-    curl_close($ch);
 
     $channels = json_decode($jsonRaw, true);
     if (!$channels) {
