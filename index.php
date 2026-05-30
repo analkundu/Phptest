@@ -34,7 +34,6 @@ function fetchAllChannels($urls) {
     foreach ($handles as $id => $ch) {
         $results[$id] = curl_multi_getcontent($ch);
         curl_multi_remove_handle($multiHandle, $ch);
-        curl_close($ch);
     }
     curl_multi_close($multiHandle);
     return $results;
