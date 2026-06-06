@@ -40,30 +40,52 @@ function fetchAllChannels($urls) {
 }
 
 try {
+    // Check if a specific channel ID is requested via URL parameter (e.g., playlist.php?id=1104)
+    $requestedId = isset($_GET['id']) ? $_GET['id'] : null;
+
     // 1. Pastefy se list fetch karein
     $ch = curl_init($pastefyUrl);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
     $jsonRaw = curl_exec($ch);
+    curl_close($ch);
 
     $channels = json_decode($jsonRaw, true);
     if (!$channels) {
         die("#EXTM3U\n# Error: Could not parse JSON from Pastefy");
     }
 
-    // 2. Saare links ki list banayein parallel fetch ke liye
+    // 2. Parallel fetch ke liye links to prepare karein
     $linksToFetch = [];
     foreach ($channels as $index => $chInfo) {
+        // Agar single channel requested hai, toh baaki channels ka page web-scrape mat kijiye (Optimize performance)
+        if ($requestedId !== null && $chInfo['id'] != $requestedId) {
+            continue;
+        }
         $linksToFetch[$index] = $chInfo['link'];
     }
 
-    // 3. Ek saath saare channel pages fetch karein
+    // 3. Ek saath selected channel pages fetch karein (Single handle or multi-handle based on filter)
     $pageContents = fetchAllChannels($linksToFetch);
 
     echo "#EXTM3U\n\n";
 
+    // Standard Browser User-Agent definition to bypass CDN security blocks
+    $userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
     // 4. Data Extract aur M3U Format generate karein
     foreach ($channels as $index => $chInfo) {
+        
+        // Skip condition agar target single channel requested ID se match nahi karta
+        if ($requestedId !== null && $chInfo['id'] != $requestedId) {
+            continue;
+        }
+
+        // Ensure safety if content key index exists
+        if (!isset($pageContents[$index])) {
+            continue;
+        }
+
         $html = $pageContents[$index];
 
         // SERVER_CONFIG nikalne ke liye regex
@@ -79,8 +101,17 @@ try {
                 echo "#EXTINF:-1 tvg-id=\"{$chInfo['id']}\" tvg-name=\"{$chInfo['name']}\" tvg-logo=\"{$chInfo['logo']}\" group-title=\"{$chInfo['group']}\",{$chInfo['name']}\n";
                 echo "#KODIPROP:inputstream.adaptive.license_type=clearkey\n";
                 echo "#KODIPROP:inputstream.adaptive.license_key={$keyId}:{$key}\n";
-                echo "#EXTHTTP:{\"Cookie\":\"{$cookie}\"}\n";
-                echo "{$streamUrl}\n\n";
+                
+                // Kodi / ExoPlayer engine compatible JSON headers format
+                echo "#EXTHTTP:{\"Cookie\":\"{$cookie}\",\"User-Agent\":\"{$userAgentString}\"}\n";
+                
+                // Stream URL line with fallback standard query pipe separation
+                echo "{$streamUrl}|User-Agent={$userAgentString}\n\n";
+                
+                // Single execution match hone par processing end karein
+                if ($requestedId !== null) {
+                    break;
+                }
             }
         }
     }
