@@ -40,10 +40,14 @@ function fetchAllChannels($urls) {
 }
 
 try {
-    // Check if a specific channel ID is requested via URL parameter (e.g., playlist.php?id=1104)
+    // 1. Fetch channel list from URL parameter
     $requestedId = isset($_GET['id']) ? $_GET['id'] : null;
+    
+    // Naming change: Check if 'ext' is set to 'm3u8' for raw mode
+    $ext = isset($_GET['ext']) ? $_GET['ext'] : 'm3u';
+    $isRawMode = ($ext === 'm3u8');
 
-    // 1. Pastefy se list fetch karein
+    // 2. Pastefy se list fetch karein
     $ch = curl_init($pastefyUrl);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
@@ -51,43 +55,38 @@ try {
 
     $channels = json_decode($jsonRaw, true);
     if (!$channels) {
-        die("#EXTM3U\n# Error: Could not parse JSON from Pastefy");
+        die($isRawMode ? "# Error: Could not parse JSON" : "#EXTM3U\n# Error: Could not parse JSON");
     }
 
-    // 2. Parallel fetch ke liye links to prepare karein
+    // 3. Parallel fetch ke liye links filter karein
     $linksToFetch = [];
     foreach ($channels as $index => $chInfo) {
-        // Agar single channel requested hai, toh baaki channels ka page web-scrape mat kijiye (Optimize performance)
         if ($requestedId !== null && $chInfo['id'] != $requestedId) {
             continue;
         }
         $linksToFetch[$index] = $chInfo['link'];
     }
 
-    // 3. Ek saath selected channel pages fetch karein (Single handle or multi-handle based on filter)
     $pageContents = fetchAllChannels($linksToFetch);
 
-    echo "#EXTM3U\n\n";
+    // Only output playlist header if NOT in raw .m3u8 mode
+    if (!$isRawMode) {
+        echo "#EXTM3U\n\n";
+    }
 
-    // Standard Browser User-Agent definition to bypass CDN security blocks
     $userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
     // 4. Data Extract aur M3U Format generate karein
     foreach ($channels as $index => $chInfo) {
-        
-        // Skip condition agar target single channel requested ID se match nahi karta
         if ($requestedId !== null && $chInfo['id'] != $requestedId) {
             continue;
         }
-
-        // Ensure safety if content key index exists
         if (!isset($pageContents[$index])) {
             continue;
         }
 
         $html = $pageContents[$index];
 
-        // SERVER_CONFIG nikalne ke liye regex
         if (preg_match('/const SERVER_CONFIG\s*=\s*({.*?});/s', $html, $matches)) {
             $config = json_decode($matches[1], true);
 
@@ -97,17 +96,16 @@ try {
                 $keyId     = $config['keyId'];
                 $key       = $config['key'];
 
-                echo "#EXTINF:-1 tvg-id=\"{$chInfo['id']}\" tvg-name=\"{$chInfo['name']}\" tvg-logo=\"{$chInfo['logo']}\" group-title=\"{$chInfo['group']}\",{$chInfo['name']}\n";
+                // Only show channel info row if NOT in raw mode
+                if (!$isRawMode) {
+                    echo "#EXTINF:-1 tvg-id=\"{$chInfo['id']}\" tvg-name=\"{$chInfo['name']}\" tvg-logo=\"{$chInfo['logo']}\" group-title=\"{$chInfo['group']}\",{$chInfo['name']}\n";
+                }
+                
                 echo "#KODIPROP:inputstream.adaptive.license_type=clearkey\n";
                 echo "#KODIPROP:inputstream.adaptive.license_key={$keyId}:{$key}\n";
-                
-                // Kodi / ExoPlayer engine compatible JSON headers format
                 echo "#EXTHTTP:{\"Cookie\":\"{$cookie}\",\"User-Agent\":\"{$userAgentString}\"}\n";
-                
-                // Stream URL line with fallback standard query pipe separation
                 echo "{$streamUrl}|User-Agent={$userAgentString}\n\n";
                 
-                // Single execution match hone par processing end karein
                 if ($requestedId !== null) {
                     break;
                 }
