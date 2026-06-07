@@ -1,15 +1,17 @@
 {
   "functions": {
-    "api/index.php": {
-      "runtime": "vercel-php@0.9.0",
-      "memory": 1024,
-      "maxDuration": 60
+    "*.php": {
+      "runtime": "vercel-php@0.7.3"
     }
   },
   "routes": [
     {
+      "src": "/starmovies.php",
+      "dest": "/starmovies.php"
+    },
+    {
       "src": "/(.*)",
-      "dest": "/api/index.php"
+      "dest": "/index.php"
     }
   ]
 }
