@@ -7,11 +7,11 @@
   "routes": [
     {
       "src": "/starmovies.php",
-      "dest": "/starmovies.php"
+      "dest": "/api/starmovies.php"
     },
     {
       "src": "/(.*)",
-      "dest": "/index.php"
+      "dest": "/api/index.php"
     }
   ]
 }
